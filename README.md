@@ -19,6 +19,7 @@ python3 -m http.server 5174
 - 全項目OK表示
 - Bluetooth QRリーダー向けの入力欄フォーカス維持
 - スマートフォンカメラでの連続読取
+- iPhone Safari 向けのカメラQR読取フォールバック
 - 未完了注文中に別伝票QRを読んだ場合の切替確認
 - 読取履歴表示
 
@@ -54,4 +55,4 @@ python3 -m http.server 5174
 
 ## 補足
 
-カメラQR読取はブラウザ標準の `BarcodeDetector` API を利用しています。未対応ブラウザではBluetooth QRリーダーまたは手入力欄を使ってください。
+カメラQR読取はブラウザ標準の `BarcodeDetector` API を優先し、未対応ブラウザでは同梱の `jsQR` で読み取ります。iPhoneではHTTPSの公開URLで開き、ブラウザのカメラ権限を許可してください。

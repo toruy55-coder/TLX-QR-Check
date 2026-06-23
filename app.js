@@ -62,7 +62,9 @@ function init() {
 
   if ("BarcodeDetector" in window) {
     state.barcodeDetector = new window.BarcodeDetector({ formats: ["qr_code"] });
-  } else {
+  }
+
+  if (!state.barcodeDetector && typeof window.jsQR !== "function") {
     setCameraMessage("このブラウザはカメラQR読取に未対応です。Bluetoothリーダー入力を利用してください。");
   }
 }
@@ -307,32 +309,54 @@ function handleError(payload, message) {
 }
 
 async function startCamera() {
-  if (!state.barcodeDetector) {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setCameraMessage("このブラウザではカメラを起動できません。HTTPSの公開URLで開いてください。");
+    showResult("error", "カメラエラー", "カメラを起動できませんでした。HTTPSの公開URLで開いてください。");
+    ensureInputFocus();
+    return;
+  }
+
+  if (!state.barcodeDetector && typeof window.jsQR !== "function") {
     setCameraMessage("このブラウザではカメラQR読取を開始できません。");
     ensureInputFocus();
     return;
   }
 
   try {
-    stopCamera();
-    state.cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } },
-      audio: false,
-    });
+    stopCamera(false);
+    state.cameraStream = await openCameraStream();
     els.cameraVideo.srcObject = state.cameraStream;
+    els.cameraVideo.setAttribute("playsinline", "true");
+    els.cameraVideo.setAttribute("muted", "true");
+    els.cameraVideo.muted = true;
     await els.cameraVideo.play();
-    els.cameraState.textContent = "読取中";
+    els.cameraState.textContent = state.barcodeDetector ? "読取中" : "読取中 iPhone対応";
     els.cameraOverlay.hidden = true;
-    state.cameraTimer = window.setInterval(scanCameraFrame, 250);
+    state.cameraTimer = window.setInterval(scanCameraFrame, 180);
   } catch (error) {
     setCameraMessage(`カメラを起動できませんでした。${error.message || ""}`);
-    showResult("error", "カメラエラー", "カメラを起動できませんでした。ブラウザの権限を確認してください。");
-  } finally {
-    ensureInputFocus();
+    showResult("error", "カメラエラー", "カメラを起動できませんでした。Safari/Chromeのカメラ権限とHTTPSで開いていることを確認してください。");
   }
 }
 
-function stopCamera() {
+async function openCameraStream() {
+  const preferred = {
+    video: {
+      facingMode: { ideal: "environment" },
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+    },
+    audio: false,
+  };
+
+  try {
+    return await navigator.mediaDevices.getUserMedia(preferred);
+  } catch (error) {
+    return navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  }
+}
+
+function stopCamera(refocus = true) {
   if (state.cameraTimer) {
     window.clearInterval(state.cameraTimer);
     state.cameraTimer = null;
@@ -344,25 +368,66 @@ function stopCamera() {
   els.cameraVideo.srcObject = null;
   els.cameraState.textContent = "停止中";
   setCameraMessage("カメラ未起動");
+  if (refocus) ensureInputFocus();
 }
 
 async function scanCameraFrame() {
   if (!state.cameraStream || els.cameraVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
 
   try {
-    const results = await state.barcodeDetector.detect(els.cameraVideo);
-    if (!results.length) return;
-
-    const text = results[0].rawValue.trim();
-    const now = Date.now();
-    if (text === state.lastCameraText && now - state.lastCameraAt < SCAN_COOLDOWN_MS) return;
-
-    state.lastCameraText = text;
-    state.lastCameraAt = now;
-    processQrText(text);
+    const text = await readQrFromCamera();
+    if (!text) return;
+    processCameraText(text);
   } catch {
-    setCameraMessage("カメラQR読取でエラーが発生しました。");
+    const text = readQrFromCanvas();
+    if (text) {
+      processCameraText(text);
+    }
   }
+}
+
+async function readQrFromCamera() {
+  if (state.barcodeDetector) {
+    try {
+      const results = await state.barcodeDetector.detect(els.cameraVideo);
+      if (results.length) return results[0].rawValue.trim();
+    } catch {
+      state.barcodeDetector = null;
+      els.cameraState.textContent = "読取中 iPhone対応";
+    }
+  }
+
+  return readQrFromCanvas();
+}
+
+function readQrFromCanvas() {
+  if (typeof window.jsQR !== "function") return "";
+
+  const width = els.cameraVideo.videoWidth;
+  const height = els.cameraVideo.videoHeight;
+  if (!width || !height) return "";
+
+  const canvas = els.cameraCanvas;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  canvas.width = width;
+  canvas.height = height;
+  context.drawImage(els.cameraVideo, 0, 0, width, height);
+
+  const imageData = context.getImageData(0, 0, width, height);
+  const result = window.jsQR(imageData.data, width, height, {
+    inversionAttempts: "dontInvert",
+  });
+
+  return result?.data?.trim() || "";
+}
+
+function processCameraText(text) {
+  const now = Date.now();
+  if (text === state.lastCameraText && now - state.lastCameraAt < SCAN_COOLDOWN_MS) return;
+
+  state.lastCameraText = text;
+  state.lastCameraAt = now;
+  processQrText(text);
 }
 
 function setCameraMessage(message) {
@@ -599,6 +664,7 @@ function canParseJson(value) {
 }
 
 function ensureInputFocus() {
+  if (state.cameraStream) return;
   if (!els.confirmModal.hidden) return;
   els.qrInput.focus({ preventScroll: true });
   els.focusState.textContent = document.activeElement === els.qrInput ? "フォーカス中" : "入力待ち";

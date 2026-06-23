@@ -55,7 +55,7 @@
             <span id="cameraState">停止中</span>
           </div>
           <div class="camera-frame">
-            <video id="cameraVideo" playsinline muted></video>
+            <video id="cameraVideo" playsinline muted autoplay></video>
             <canvas id="cameraCanvas" hidden></canvas>
             <div id="cameraOverlay">カメラ未起動</div>
           </div>
@@ -121,6 +121,10 @@
       </div>
     </div>
 
+    <script src="jsQR.js?v=iphone-camera-1"></script>
+    <script>
+      window.jsQR = window.jsQR || (window.exports && window.exports.jsQR);
+    </script>
     <script src="app.js"></script>
   </body>
 </html>
