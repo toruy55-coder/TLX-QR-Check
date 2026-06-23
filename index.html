@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>眼鏡オーダーQR照合アプリ</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="top-bar">
+        <div>
+          <h1>眼鏡オーダーQR照合</h1>
+          <p id="completionBadge" class="completion-badge idle">注文未読込</p>
+        </div>
+        <div class="top-actions">
+          <button id="switchOrderButton" type="button">新しい注文</button>
+          <button id="resetButton" type="button" class="secondary">リセット</button>
+        </div>
+      </header>
+
+      <section id="resultPanel" class="result-panel neutral" aria-live="polite">
+        <div class="result-mark" id="resultMark">待機</div>
+        <div>
+          <p id="resultTitle">伝票QRを読み込んでください。</p>
+          <p id="resultDetail">共通QR読取欄、またはカメラで読み取れます。</p>
+        </div>
+      </section>
+
+      <section class="scanner-layout">
+        <div class="scan-card">
+          <div class="section-head">
+            <h2>共通QR読取</h2>
+            <span id="focusState">入力待ち</span>
+          </div>
+          <textarea
+            id="qrInput"
+            rows="4"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            inputmode="text"
+            placeholder='{"qr_type":"order",...}'
+            aria-label="共通QR読取欄"
+          ></textarea>
+          <div class="button-row">
+            <button id="processInputButton" type="button">読取内容を処理</button>
+            <button id="clearInputButton" type="button" class="secondary">入力クリア</button>
+          </div>
+        </div>
+
+        <div class="scan-card camera-card">
+          <div class="section-head">
+            <h2>カメラQR読取</h2>
+            <span id="cameraState">停止中</span>
+          </div>
+          <div class="camera-frame">
+            <video id="cameraVideo" playsinline muted></video>
+            <canvas id="cameraCanvas" hidden></canvas>
+            <div id="cameraOverlay">カメラ未起動</div>
+          </div>
+          <div class="button-row">
+            <button id="startCameraButton" type="button">カメラ開始</button>
+            <button id="stopCameraButton" type="button" class="secondary">停止</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="content-grid">
+        <article class="order-panel">
+          <h2>現在の注文情報</h2>
+          <dl id="orderDetails" class="order-details">
+            <div><dt>注文番号</dt><dd>-</dd></div>
+            <div><dt>フレーム品番</dt><dd>-</dd></div>
+            <div><dt>フレームカラー</dt><dd>-</dd></div>
+            <div><dt>レンズカラー</dt><dd>-</dd></div>
+            <div><dt>レンズカーブ</dt><dd>-</dd></div>
+            <div><dt>レンズ形状</dt><dd>-</dd></div>
+          </dl>
+        </article>
+
+        <article class="status-panel">
+          <h2>照合状況</h2>
+          <ul id="checkList" class="check-list"></ul>
+        </article>
+      </section>
+
+      <section class="history-panel">
+        <div class="section-head">
+          <h2>読取履歴</h2>
+          <button id="clearHistoryButton" type="button" class="secondary small">履歴削除</button>
+        </div>
+        <div class="history-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>時刻</th>
+                <th>注文</th>
+                <th>種別</th>
+                <th>項目</th>
+                <th>結果</th>
+                <th>内容</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody">
+              <tr><td colspan="6" class="empty">履歴はまだありません。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <div id="confirmModal" class="modal" hidden>
+      <div class="modal-body" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <h2 id="modalTitle">注文切替の確認</h2>
+        <p id="modalMessage"></p>
+        <div class="button-row end">
+          <button id="cancelSwitchButton" type="button" class="secondary">キャンセル</button>
+          <button id="confirmSwitchButton" type="button">切り替える</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
