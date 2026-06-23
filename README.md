@@ -8,7 +8,10 @@
 python3 -m http.server 5174
 ```
 
-ブラウザで `http://localhost:5174/` を開きます。
+ブラウザで以下を開きます。
+
+- 全項目チェック版: `http://localhost:5174/`
+- 単項目チェック版: `http://localhost:5174/single-check.html`
 
 ## 主な機能
 
@@ -22,6 +25,7 @@ python3 -m http.server 5174
 - iPhone Safari 向けのカメラQR読取フォールバック
 - 未完了注文中に別伝票QRを読んだ場合の切替確認
 - 読取履歴表示
+- 単項目チェック版では、棚QRを読むたびに1回分のOK / NGだけを判定
 
 ## サンプルQR
 
@@ -56,3 +60,5 @@ python3 -m http.server 5174
 ## 補足
 
 カメラQR読取はブラウザ標準の `BarcodeDetector` API を優先し、未対応ブラウザでは同梱の `jsQR` で読み取ります。iPhoneではHTTPSの公開URLで開き、ブラウザのカメラ権限を許可してください。
+
+QR入力、カメラ連続読取、音通知、表示補助は `common.js` に共通化しています。

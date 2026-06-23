@@ -12,13 +12,12 @@ const {
   showResult: showCommonResult,
 } = window.QRCommon;
 
-const STORAGE_KEY = "tlxQrCheckState.v1";
+const STORAGE_KEY = "tlxQrSingleCheckState.v1";
 
 const state = {
   order: null,
-  checks: createEmptyChecks(),
+  latestResult: null,
   history: [],
-  pendingOrder: null,
   qrInput: null,
   camera: null,
 };
@@ -34,10 +33,9 @@ const els = {
   processInputButton: document.querySelector("#processInputButton"),
   clearInputButton: document.querySelector("#clearInputButton"),
   orderDetails: document.querySelector("#orderDetails"),
-  checkList: document.querySelector("#checkList"),
+  singleResultDetails: document.querySelector("#singleResultDetails"),
   historyBody: document.querySelector("#historyBody"),
   resetButton: document.querySelector("#resetButton"),
-  switchOrderButton: document.querySelector("#switchOrderButton"),
   clearHistoryButton: document.querySelector("#clearHistoryButton"),
   cameraVideo: document.querySelector("#cameraVideo"),
   cameraCanvas: document.querySelector("#cameraCanvas"),
@@ -45,10 +43,6 @@ const els = {
   cameraState: document.querySelector("#cameraState"),
   startCameraButton: document.querySelector("#startCameraButton"),
   stopCameraButton: document.querySelector("#stopCameraButton"),
-  confirmModal: document.querySelector("#confirmModal"),
-  modalMessage: document.querySelector("#modalMessage"),
-  cancelSwitchButton: document.querySelector("#cancelSwitchButton"),
-  confirmSwitchButton: document.querySelector("#confirmSwitchButton"),
 };
 
 init();
@@ -64,7 +58,7 @@ function init() {
     processButton: els.processInputButton,
     clearButton: els.clearInputButton,
     onText: processQrText,
-    shouldFocus: () => !state.camera?.isActive() && els.confirmModal.hidden,
+    shouldFocus: () => !state.camera?.isActive(),
   });
 
   state.camera = createCameraScanner({
@@ -84,25 +78,10 @@ function init() {
 
 function bindEvents() {
   els.resetButton.addEventListener("click", resetCurrentOrder);
-  els.switchOrderButton.addEventListener("click", requestManualSwitch);
   els.clearHistoryButton.addEventListener("click", () => {
     state.history = [];
     saveState();
     renderHistory();
-    ensureInputFocus();
-  });
-
-  els.cancelSwitchButton.addEventListener("click", () => {
-    state.pendingOrder = null;
-    hideModal();
-    showResult("warn", "キャンセル", "注文切替をキャンセルしました。");
-    ensureInputFocus();
-  });
-  els.confirmSwitchButton.addEventListener("click", () => {
-    const order = state.pendingOrder;
-    state.pendingOrder = null;
-    hideModal();
-    if (order) loadOrder(order, "新しい注文に切り替えました。");
     ensureInputFocus();
   });
 }
@@ -123,10 +102,6 @@ function processQrText(text) {
     handleShelfQr(payload);
     return;
   }
-  if (payload.qr_type === "item") {
-    handleError(payload, "現物QRは将来対応です。初期版では棚QRを読み込んでください。");
-    return;
-  }
   handleError(payload, "未対応のQRコードです。");
 }
 
@@ -137,30 +112,8 @@ function handleOrderQr(payload) {
     return;
   }
 
-  if (state.order && !isComplete()) {
-    state.pendingOrder = payload;
-    showSwitchModal(payload);
-    recordHistory({
-      orderId: state.order.order_id,
-      qrType: "order",
-      result: "エラー",
-      detail: `未完了注文中に別伝票QRを読取: ${payload.order_id}`,
-    });
-    saveState();
-    renderHistory();
-    notify("warn");
-    return;
-  }
-
-  const message = state.order && isComplete()
-    ? `前の注文は全項目OKです。新しい注文に切り替えました。注文番号：${payload.order_id}`
-    : "伝票QRを読み込みました。";
-  loadOrder(payload, message);
-}
-
-function loadOrder(order, message) {
-  state.order = normalizeOrder(order);
-  state.checks = createEmptyChecks();
+  state.order = normalizeOrder(payload);
+  state.latestResult = null;
   recordHistory({
     orderId: state.order.order_id,
     qrType: "order",
@@ -168,7 +121,7 @@ function loadOrder(order, message) {
     detail: "伝票QR読取",
   });
   notify("info");
-  showResult("info", "伝票QR読取", message);
+  showResult("info", "伝票QR読取", `注文番号：${state.order.order_id}`);
   saveState();
   renderAll();
 }
@@ -198,12 +151,19 @@ function handleShelfQr(payload) {
   const expected = String(state.order[payload.check_item]);
   const actual = String(payload.value);
   const ok = expected === actual;
-  state.checks[payload.check_item] = ok ? "ok" : "ng";
-
   const label = payload.label || "-";
   const result = ok ? "OK" : "NG";
   const title = ok ? `${itemLabel(payload.check_item)} 一致` : `${itemLabel(payload.check_item)}が違います`;
   const detail = `伝票指定：${expected} / 読取値：${actual} / 棚：${label}`;
+
+  state.latestResult = {
+    checkItem: payload.check_item,
+    result,
+    expected,
+    actual,
+    label,
+    time: new Date().toLocaleTimeString("ja-JP", { hour12: false }),
+  };
 
   recordHistory({
     orderId: state.order.order_id,
@@ -220,16 +180,17 @@ function handleShelfQr(payload) {
   showResult(ok ? "ok" : "ng", result, `${title}\n${detail}`);
   saveState();
   renderAll();
-
-  if (ok && isComplete()) {
-    window.setTimeout(() => {
-      showResult("ok", "全項目OK", "次工程へ進めます。");
-      renderCompletion();
-    }, 240);
-  }
 }
 
 function handleError(payload, message) {
+  state.latestResult = {
+    checkItem: payload?.check_item || "-",
+    result: "エラー",
+    expected: "-",
+    actual: payload?.value || "-",
+    label: payload?.label || "-",
+    time: new Date().toLocaleTimeString("ja-JP", { hour12: false }),
+  };
   recordHistory({
     orderId: state.order?.order_id || "-",
     qrType: payload?.qr_type || "-",
@@ -242,72 +203,32 @@ function handleError(payload, message) {
   notify("error");
   showResult("error", "エラー", message);
   saveState();
-  renderHistory();
-}
-
-function requestManualSwitch() {
-  if (!state.order) {
-    showResult("warn", "注文未読込", "現在の注文はありません。");
-    ensureInputFocus();
-    return;
-  }
-
-  if (!isComplete()) {
-    showResult("warn", "未完了", `現在の注文 ${state.order.order_id} はまだ全項目OKになっていません。新しい伝票QRを読み込むと切替確認が表示されます。`);
-    ensureInputFocus();
-    return;
-  }
-
-  resetCurrentOrder();
-  showResult("info", "新しい注文待ち", "次の伝票QRを読み込んでください。");
+  renderAll();
 }
 
 function resetCurrentOrder() {
   state.order = null;
-  state.checks = createEmptyChecks();
-  state.pendingOrder = null;
+  state.latestResult = null;
   saveState();
   renderAll();
   showResult("neutral", "待機", "伝票QRを読み込んでください。");
   ensureInputFocus();
 }
 
-function showSwitchModal(newOrder) {
-  els.modalMessage.textContent = [
-    "現在の注文はまだ全項目OKになっていません。",
-    `現在の注文：${state.order.order_id}`,
-    `新しく読み込んだ注文：${newOrder.order_id}`,
-    "現在の注文を中断して、新しい注文に切り替えますか？",
-  ].join("\n");
-  els.confirmModal.hidden = false;
-  els.cancelSwitchButton.focus();
-}
-
-function hideModal() {
-  els.confirmModal.hidden = true;
-}
-
 function renderAll() {
-  renderCompletion();
+  renderBadge();
   renderOrder();
-  renderChecks();
+  renderLatestResult();
   renderHistory();
 }
 
-function renderCompletion() {
+function renderBadge() {
   if (!state.order) {
     els.completionBadge.textContent = "注文未読込";
     els.completionBadge.className = "completion-badge idle";
     return;
   }
-
-  if (isComplete()) {
-    els.completionBadge.textContent = "全項目OK 次工程へ進めます";
-    els.completionBadge.className = "completion-badge complete";
-    return;
-  }
-
-  els.completionBadge.textContent = `照合中 ${countOk()} / ${CHECK_ITEMS.length}`;
+  els.completionBadge.textContent = `単項目チェック中 ${state.order.order_id}`;
   els.completionBadge.className = "completion-badge pending";
 }
 
@@ -325,17 +246,23 @@ function renderOrder() {
   `).join("");
 }
 
-function renderChecks() {
-  els.checkList.innerHTML = CHECK_ITEMS.map((item) => {
-    const status = state.checks[item.key] || "unchecked";
-    const label = status === "ok" ? "OK" : status === "ng" ? "NG" : "未";
-    return `
-      <li class="check-item ${status}">
-        <strong>${escapeHtml(item.label)}</strong>
-        <span>${label}</span>
-      </li>
-    `;
-  }).join("");
+function renderLatestResult() {
+  const latest = state.latestResult;
+  const values = [
+    ["照合項目", latest ? itemLabel(latest.checkItem) : "-"],
+    ["判定", latest?.result || "-"],
+    ["伝票指定", latest?.expected || "-"],
+    ["読取値", latest?.actual || "-"],
+    ["表示名", latest?.label || "-"],
+    ["読取時刻", latest?.time || "-"],
+  ];
+
+  els.singleResultDetails.innerHTML = values.map(([label, value]) => `
+    <div>
+      <dt>${escapeHtml(label)}</dt>
+      <dd>${escapeHtml(value)}</dd>
+    </div>
+  `).join("");
 }
 
 function renderHistory() {
@@ -382,7 +309,7 @@ function recordHistory(entry) {
 function saveState() {
   const serializable = {
     order: state.order,
-    checks: state.checks,
+    latestResult: state.latestResult,
     history: state.history,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
@@ -392,25 +319,13 @@ function restoreState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
     state.order = saved.order || null;
-    state.checks = { ...createEmptyChecks(), ...(saved.checks || {}) };
+    state.latestResult = saved.latestResult || null;
     state.history = Array.isArray(saved.history) ? saved.history : [];
   } catch {
     state.order = null;
-    state.checks = createEmptyChecks();
+    state.latestResult = null;
     state.history = [];
   }
-}
-
-function createEmptyChecks() {
-  return Object.fromEntries(CHECK_ITEMS.map((item) => [item.key, "unchecked"]));
-}
-
-function isComplete() {
-  return CHECK_ITEMS.every((item) => state.checks[item.key] === "ok");
-}
-
-function countOk() {
-  return CHECK_ITEMS.filter((item) => state.checks[item.key] === "ok").length;
 }
 
 function normalizeOrder(order) {

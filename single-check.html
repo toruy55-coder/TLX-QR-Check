@@ -3,19 +3,18 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>眼鏡オーダーQR照合アプリ</title>
+    <title>眼鏡オーダーQR照合アプリ 単項目チェック</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <main class="app-shell">
       <header class="top-bar">
         <div>
-          <h1>眼鏡オーダーQR照合</h1>
+          <h1>単項目QR照合</h1>
           <p id="completionBadge" class="completion-badge idle">注文未読込</p>
         </div>
         <div class="top-actions">
-          <a class="nav-link" href="single-check.html">単項目チェック</a>
-          <button id="switchOrderButton" type="button">新しい注文</button>
+          <a class="nav-link" href="index.html">全項目チェック</a>
           <button id="resetButton" type="button" class="secondary">リセット</button>
         </div>
       </header>
@@ -24,7 +23,7 @@
         <div class="result-mark" id="resultMark">待機</div>
         <div>
           <p id="resultTitle">伝票QRを読み込んでください。</p>
-          <p id="resultDetail">共通QR読取欄、またはカメラで読み取れます。</p>
+          <p id="resultDetail">伝票QRの後、照合したい棚QRを読み取ります。</p>
         </div>
       </section>
 
@@ -81,8 +80,15 @@
         </article>
 
         <article class="status-panel">
-          <h2>照合状況</h2>
-          <ul id="checkList" class="check-list"></ul>
+          <h2>最新照合</h2>
+          <dl id="singleResultDetails" class="order-details single-result-details">
+            <div><dt>照合項目</dt><dd>-</dd></div>
+            <div><dt>判定</dt><dd>-</dd></div>
+            <div><dt>伝票指定</dt><dd>-</dd></div>
+            <div><dt>読取値</dt><dd>-</dd></div>
+            <div><dt>表示名</dt><dd>-</dd></div>
+            <div><dt>読取時刻</dt><dd>-</dd></div>
+          </dl>
         </article>
       </section>
 
@@ -111,22 +117,11 @@
       </section>
     </main>
 
-    <div id="confirmModal" class="modal" hidden>
-      <div class="modal-body" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-        <h2 id="modalTitle">注文切替の確認</h2>
-        <p id="modalMessage"></p>
-        <div class="button-row end">
-          <button id="cancelSwitchButton" type="button" class="secondary">キャンセル</button>
-          <button id="confirmSwitchButton" type="button">切り替える</button>
-        </div>
-      </div>
-    </div>
-
     <script src="jsQR.js?v=iphone-camera-1"></script>
     <script>
       window.jsQR = window.jsQR || (window.exports && window.exports.jsQR);
     </script>
     <script src="common.js"></script>
-    <script src="app.js"></script>
+    <script src="single-check.js"></script>
   </body>
 </html>

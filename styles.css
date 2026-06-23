@@ -66,6 +66,22 @@ button.small {
   font-size: 0.9rem;
 }
 
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  border-radius: 6px;
+  padding: 0 16px;
+  background: #dce8ee;
+  color: #173442;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.nav-link:hover {
+  filter: brightness(0.97);
+}
+
 .app-shell {
   width: min(1180px, 100%);
   margin: 0 auto;
@@ -348,6 +364,10 @@ video {
   overflow-wrap: anywhere;
   font-size: 1.12rem;
   font-weight: 900;
+}
+
+.single-result-details div:nth-child(2) dd {
+  font-size: 1.4rem;
 }
 
 .check-list {
